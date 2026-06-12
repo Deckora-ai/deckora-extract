@@ -35,6 +35,12 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
+      - name: Fail fast if Cloudflare secrets are missing
+        run: |
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ] || [ -z "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]; then
+            echo "::error::Repo secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are not set. Add them under Settings → Secrets and variables → Actions, then re-run."
+            exit 1
+          fi
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:

@@ -31,7 +31,20 @@ export default {
     }
     // Single named instance: extraction is stateless, one warm container
     // serves all requests; Cloudflare spins it down after sleepAfter.
-    const container = getContainer(env.EXTRACT_CONTAINER, "main");
-    return container.fetch(request);
+    // try/catch turns "no container behind the shim" (and any DO-level throw)
+    // into a diagnosable 503 JSON instead of an opaque Cloudflare 1101 — the
+    // deckora-marketing caller treats any non-200 as fail-soft.
+    try {
+      const container = getContainer(env.EXTRACT_CONTAINER, "main");
+      return await container.fetch(request);
+    } catch (e) {
+      return new Response(
+        JSON.stringify({
+          ok: false, error: "container_unavailable",
+          detail: String((e && e.message) || e).slice(0, 300),
+        }),
+        { status: 503, headers: { "Content-Type": "application/json" } },
+      );
+    }
   },
 };
