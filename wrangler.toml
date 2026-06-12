@@ -6,6 +6,10 @@ name = "deckora-extract"
 main = "worker/index.js"
 compatibility_date = "2026-06-12"
 
+# Deterministic address on the deckora.ai zone — no workers.dev subdomain
+# discovery needed. Cloudflare provisions the DNS record automatically.
+routes = [{ pattern = "extract.deckora.ai", custom_domain = true }]
+
 [[containers]]
 class_name = "ExtractContainer"
 image = "./Dockerfile"
