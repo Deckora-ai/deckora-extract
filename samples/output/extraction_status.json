@@ -1,0 +1,6 @@
+{
+  "extraction_status": "pending_broker_review",
+  "reason": "text layer too thin (99.3 chars/page); routed to human review per No-API law. OCR fallback unavailable: pytesseract not installed; run `pip install pytesseract pillow` and install the Tesseract OCR binary",
+  "ocr_available": false,
+  "api_calls": 0
+}

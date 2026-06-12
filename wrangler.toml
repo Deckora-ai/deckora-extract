@@ -1,0 +1,23 @@
+# deckora-extract — standalone Worker + Container (Workers Paid plan required).
+# Deployed SEPARATELY from deckora-marketing on purpose: the main worker's
+# deploy path must never require Docker. Deploy from this directory:
+#   npm install && npx wrangler deploy        (Docker Desktop must be running)
+name = "deckora-extract"
+main = "worker/index.js"
+compatibility_date = "2026-06-12"
+
+[[containers]]
+class_name = "ExtractContainer"
+image = "./Dockerfile"
+max_instances = 2
+# "basic" = 1 GiB RAM / 1/4 vCPU — PyMuPDF + OpenCV on a heavy PowerPoint-export
+# OM needs the gigabyte. Bump to "standard" if photo passes ever OOM.
+instance_type = "basic"
+
+[[durable_objects.bindings]]
+name = "EXTRACT_CONTAINER"
+class_name = "ExtractContainer"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ExtractContainer"]

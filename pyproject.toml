@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shop1031-extract"
+version = "0.2.0"
+description = "Code-only OM PDF extraction, multi-path verification, and photo de-layering. Zero LLM API calls."
+requires-python = ">=3.11"
+license = { text = "Proprietary - Shop 1031 / Deckora partnership" }
+
+# Core runtime. The pipeline runs offline with only these three.
+dependencies = [
+    "pymupdf>=1.24",
+    "opencv-python-headless>=4.9",
+    "numpy>=1.26",
+]
+
+[project.optional-dependencies]
+# OCR fallback for scanned / thin-text OMs (also needs the Tesseract binary).
+ocr = ["pytesseract>=0.3.10", "pillow>=10.0"]
+# Env-gated photo fallback (Street View / aerial) and SEC EDGAR confirmation.
+fallback = ["requests>=2.31"]
+# Offline zip -> city/state confirmation (Leg 2.5).
+geo = ["pgeocode>=0.4"]
+# Table cross-check, held in reserve.
+tables = ["pdfplumber>=0.11"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"shop1031_extract.photos" = ["logo_templates/*"]

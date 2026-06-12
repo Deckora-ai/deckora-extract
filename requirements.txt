@@ -1,0 +1,27 @@
+# shop1031-extract runtime dependencies.
+# Core extraction, multi-path verification, and photo de-layering run fully
+# offline with only the three required packages below. No LLM client is listed
+# anywhere because the pipeline makes zero LLM API calls.
+
+# --- required (core extraction + photo de-layering) ---
+pymupdf>=1.24            # fitz: PDF intake, image stream enumeration, rasterize
+opencv-python-headless>=4.9   # cv2: overlay detection, inpaint reconstruction
+numpy>=1.26              # array math for the photo pipeline and field stats
+
+# Table cross-check, held in reserve (intake runs on word geometry today).
+pdfplumber>=0.11
+
+# --- optional: OCR fallback for scanned / thin-text OMs ---
+# Without these the pipeline still imports and runs; thin-text OMs route to the
+# human review queue instead of being OCR-recovered. Also needs the Tesseract
+# binary installed on the system (see docs/INSTALL.md).
+# pytesseract>=0.3.10
+# pillow>=10.0
+
+# --- optional: env-gated photo fallback (Street View / aerial) and EDGAR ---
+# Only used when GOOGLE_MAPS_API_KEY / MAPBOX_TOKEN are set. Lazy-imported, so
+# the core path never requires it.
+requests>=2.31
+
+# --- optional: offline zip -> city/state confirmation (Leg 2.5) ---
+# pgeocode>=0.4

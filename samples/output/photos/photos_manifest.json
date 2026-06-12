@@ -1,0 +1,21 @@
+{
+  "asset_id": "sample_om",
+  "source_pdf": "samples/input/sample_om.pdf",
+  "photos": [
+    {
+      "filename": "exterior-01.jpg",
+      "method": "raw_extract",
+      "quality_score": 1.0,
+      "overlay_removed_pct": 0.0,
+      "verification_status": "verified"
+    },
+    {
+      "filename": "exterior-02.jpg",
+      "method": "inpainted",
+      "quality_score": 0.954,
+      "overlay_removed_pct": 0.1149,
+      "verification_status": "verified"
+    }
+  ],
+  "pass_failures": []
+}

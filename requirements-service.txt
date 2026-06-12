@@ -1,0 +1,5 @@
+# HTTP layer only — the extraction deps live in requirements.txt (unchanged
+# from the upstream handoff so the two files diff cleanly against it).
+fastapi>=0.110
+uvicorn>=0.29
+requests>=2.31

@@ -1,0 +1,13 @@
+shop1031-extract — partnership license snapshot
+
+This software is shared between Shop 1031 and Deckora under their partnership.
+All rights reserved. This is not an open source license.
+
+It is provided for use within the Shop 1031 / Deckora partnership only. Do not
+redistribute it outside the partnership without written permission from both
+parties.
+
+The software is provided as is, without warranty of any kind, express or
+implied. The partners are not liable for any claim or damages arising from its
+use. Users are responsible for their own conduct under applicable law and
+professional regulations.

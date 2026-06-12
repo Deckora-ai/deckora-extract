@@ -1,0 +1,47 @@
+# Online build + deploy: every push to main runs the offline test suite, then
+# builds the container image on the GitHub runner (Docker preinstalled, amd64
+# native) and deploys via wrangler — image pushed to the Cloudflare Registry.
+# No local Docker required anywhere.
+#
+# Repo secrets required (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_API_TOKEN   — token with Workers + Containers edit permissions
+#   CLOUDFLARE_ACCOUNT_ID  — from `npx wrangler whoami` or the dashboard URL
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt -r requirements-service.txt
+      - name: Regenerate synthetic fixtures
+        run: python tests/make_photo_fixture.py
+      - name: Package test suite (offline, deterministic)
+        run: |
+          python tests/test_fields.py
+          python tests/test_contamination.py
+          python tests/test_ocr.py
+          python tests/test_photos.py
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - name: Deploy worker + container image
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

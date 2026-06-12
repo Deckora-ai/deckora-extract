@@ -1,0 +1,10 @@
+__pycache__
+*.pyc
+.git
+docs/
+samples/
+tests/
+scripts/
+.env
+.env.example
+out/
