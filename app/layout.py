@@ -107,7 +107,43 @@ def _fill_is_near_white(col) -> bool:
     return bool(comps) and all(v >= NEAR_WHITE_FLOOR for v in comps[:3])
 
 
-def _page_layout(doc: fitz.Document, page: fitz.Page, number: int) -> dict:
+# Per-frame image rendering budget (Studio reconstruction "match the PDF" mode).
+# Each placed image is normalized to a browser-safe JPEG so the worker can drop
+# the PDF's own pixels into the matching Studio frame. Bounded so the response
+# stays sane on image-heavy OMs.
+FRAME_MAX_EDGE = 1000          # downscale longest edge to this before encoding
+FRAME_JPEG_QUALITY = 72
+FRAME_MAX_BYTES = 600_000      # skip a single frame whose JPEG is still bigger
+FRAME_DOC_BUDGET = 28          # max rendered frames per document
+
+
+def _render_image_b64(doc: fitz.Document, xref: int) -> str | None:
+    """Embedded image at `xref` -> base64 browser-safe JPEG, or None.
+
+    Uses the image's OWN pixels (not a page-region render), so no overlaid page
+    text or vector branding is baked in — just the picture that was placed.
+    Normalizes colorspace (CMYK/alpha -> RGB) and downscales oversized images.
+    """
+    try:
+        pix = fitz.Pixmap(doc, xref)
+        if pix.alpha or pix.n >= 5 or (pix.colorspace and pix.colorspace.name not in ("DeviceRGB", "DeviceGray")):
+            pix = fitz.Pixmap(fitz.csRGB, pix)
+        # Halve until the longest edge is at/under the cap (shrink is power-of-2).
+        guard = 0
+        while max(pix.width, pix.height) > FRAME_MAX_EDGE and guard < 5:
+            pix.shrink(1)
+            guard += 1
+        jpg = pix.tobytes("jpeg", jpg_quality=FRAME_JPEG_QUALITY)
+        if not jpg or len(jpg) > FRAME_MAX_BYTES:
+            return None
+        import base64 as _b64
+        return _b64.b64encode(jpg).decode()
+    except Exception:  # noqa: BLE001 — a bad stream never sinks the page
+        return None
+
+
+def _page_layout(doc: fitz.Document, page: fitz.Page, number: int,
+                 render_frames: bool = False, budget: dict | None = None) -> dict:
     rect = page.rect
     out: dict = {
         "number": number,
@@ -175,12 +211,21 @@ def _page_layout(doc: fitz.Document, page: fitz.Page, number: int) -> dict:
             if len(images) >= IMAGE_CAP:
                 truncated = True
                 break
-            images.append({
+            img_entry = {
                 "xref": int(xref),
                 "bbox": _bbox(r),
                 "width_px": w_px,
                 "height_px": h_px,
-            })
+            }
+            # "Match the PDF" mode: attach the frame's own pixels so the Studio
+            # composer can fill the matching frame. Budget-bounded across the doc.
+            if render_frames and budget is not None and budget.get("left", 0) > 0:
+                b64 = _render_image_b64(doc, int(xref))
+                if b64:
+                    img_entry["data_b64"] = b64
+                    img_entry["fmt"] = "jpeg"
+                    budget["left"] -= 1
+            images.append(img_entry)
 
     # ---- large solid vector fills ---------------------------------------
     fills = out["fills"]
@@ -209,8 +254,14 @@ def _page_layout(doc: fitz.Document, page: fitz.Page, number: int) -> dict:
 
 
 def extract_layout(pdf_path, asset_id: str = "om",
-                   max_pages: int = DEFAULT_MAX_PAGES) -> dict:
-    """Pure, offline layout extraction — the testable core of /v1/layout."""
+                   max_pages: int = DEFAULT_MAX_PAGES,
+                   render_frames: bool = False) -> dict:
+    """Pure, offline layout extraction — the testable core of /v1/layout.
+
+    render_frames: when True, each placed image carries `data_b64` (a browser-
+    safe JPEG of its own pixels) so the caller can fill the matching frame with
+    the PDF's actual imagery. Bounded by FRAME_DOC_BUDGET across the document.
+    """
     try:
         doc = fitz.open(str(pdf_path))
     except Exception as e:  # noqa: BLE001 — corrupt files become a clean 422
@@ -220,10 +271,12 @@ def extract_layout(pdf_path, asset_id: str = "om",
             raise HTTPException(422, "pdf could not be parsed: encrypted")
         page_count = doc.page_count
         max_pages = max(1, min(MAX_PAGES_CEILING, int(max_pages)))
+        budget = {"left": FRAME_DOC_BUDGET} if render_frames else None
         pages = []
         for i in range(min(page_count, max_pages)):
             try:
-                pages.append(_page_layout(doc, doc.load_page(i), i + 1))
+                pages.append(_page_layout(doc, doc.load_page(i), i + 1,
+                                          render_frames=render_frames, budget=budget))
             except Exception as e:  # noqa: BLE001 — one bad page never sinks the doc
                 pages.append({"number": i + 1, "error": str(e)})
         try:
@@ -257,12 +310,14 @@ async def layout_endpoint(request: Request):
     except (TypeError, ValueError):
         max_pages = DEFAULT_MAX_PAGES
     max_pages = max(1, min(MAX_PAGES_CEILING, max_pages))
+    render_frames = bool(body.get("render_frames"))
 
     t0 = time.time()
     with tempfile.TemporaryDirectory() as td:
         pdf_path = Path(td) / "om.pdf"
         pdf_bytes = svc._download_pdf(pdf_url, pdf_path)
-        out = extract_layout(pdf_path, asset_id=asset_id, max_pages=max_pages)
+        out = extract_layout(pdf_path, asset_id=asset_id, max_pages=max_pages,
+                             render_frames=render_frames)
     out["pdf_bytes"] = pdf_bytes
     out["timings_ms"] = {"total": int((time.time() - t0) * 1000)}
     return JSONResponse(out)
