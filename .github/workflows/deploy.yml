@@ -17,8 +17,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt -r requirements-service.txt
@@ -41,8 +41,8 @@ jobs:
             echo "::error::Repo secrets CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are not set. Add them under Settings → Secrets and variables → Actions, then re-run."
             exit 1
           fi
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: "20"
       - run: npm install

@@ -87,6 +87,14 @@ def _download_pdf(url: str, dest: Path) -> int:
         raise HTTPException(502, f"pdf download failed: {e}")
     if size == 0:
         raise HTTPException(502, "pdf download returned zero bytes")
+    # Magic-bytes gate: PyMuPDF happily auto-detects and parses HTML/EPUB/images,
+    # which turns a misrouted URL (e.g. an SPA fallback page) into a confident
+    # garbage extraction — the dangerous failure mode for the caller. The PDF
+    # spec allows the header within the first 1024 bytes.
+    with open(dest, "rb") as fh:
+        head = fh.read(1024)
+    if b"%PDF-" not in head:
+        raise HTTPException(422, "not a PDF (missing %PDF- header)")
     return size
 
 
@@ -193,3 +201,11 @@ async def extract_endpoint(request: Request):
         }
 
     return JSONResponse(out)
+
+
+# Layout-geometry endpoint (app/layout.py). Registered AFTER the helpers it
+# reuses (_verify_signature / _download_pdf) are defined; layout.py imports
+# this module lazily inside the handler to avoid a circular import.
+from app.layout import layout_endpoint  # noqa: E402
+
+app.post("/v1/layout")(layout_endpoint)

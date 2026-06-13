@@ -7,15 +7,19 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONUTF8=1
 
-# opencv-python-headless wheels still link libglib at import time on slim images.
+# libglib: opencv-python-headless wheels still link it at import time on slim
+# images. tesseract-ocr: enables the OCR fallback so scanned/thin-text OMs get
+# field extraction (capped at MEDIUM confidence by design) instead of all
+# routing to pending_review.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libglib2.0-0 \
+ && apt-get install -y --no-install-recommends libglib2.0-0 tesseract-ocr \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /srv
 
 COPY requirements.txt requirements-service.txt ./
-RUN pip install --no-cache-dir -r requirements.txt -r requirements-service.txt
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-service.txt \
+        "pytesseract>=0.3.10" "pillow>=10.0"
 
 COPY src ./src
 COPY app ./app

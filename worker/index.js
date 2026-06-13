@@ -26,7 +26,8 @@ export class ExtractContainer extends Container {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname !== "/healthz" && url.pathname !== "/v1/extract") {
+    const ALLOWED_PATHS = ["/healthz", "/v1/extract", "/v1/layout"];
+    if (!ALLOWED_PATHS.includes(url.pathname)) {
       return new Response("not found", { status: 404 });
     }
     // Single named instance: extraction is stateless, one warm container
