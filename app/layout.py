@@ -113,7 +113,7 @@ def _fill_is_near_white(col) -> bool:
 # stays sane on image-heavy OMs.
 FRAME_MAX_EDGE = 1000          # downscale longest edge to this before encoding
 FRAME_JPEG_QUALITY = 72
-FRAME_MAX_BYTES = 600_000      # skip a single frame whose JPEG is still bigger
+FRAME_MAX_BYTES = 1_200_000    # skip a single frame whose JPEG is still bigger
 FRAME_DOC_BUDGET = 28          # max rendered frames per document
 
 
@@ -124,19 +124,27 @@ def _render_image_b64(doc: fitz.Document, xref: int) -> str | None:
     text or vector branding is baked in — just the picture that was placed.
     Normalizes colorspace (CMYK/alpha -> RGB) and downscales oversized images.
     """
+    import base64 as _b64
     try:
         pix = fitz.Pixmap(doc, xref)
-        if pix.alpha or pix.n >= 5 or (pix.colorspace and pix.colorspace.name not in ("DeviceRGB", "DeviceGray")):
+        # Normalize colorspace to RGB (handles CMYK=4, indexed, separation, etc.).
+        # cs.n is the component count: 1 gray, 3 rgb — both JPEG-encodable as-is.
+        cs = pix.colorspace
+        if cs is None or cs.n not in (1, 3):
             pix = fitz.Pixmap(fitz.csRGB, pix)
+        # Drop the alpha channel — JPEG cannot encode it, and many OM images
+        # (esp. PowerPoint exports with SMasks) arrive with alpha; without this
+        # tobytes("jpeg") raises and every masked image is silently lost.
+        if pix.alpha:
+            pix = fitz.Pixmap(pix, 0)
         # Halve until the longest edge is at/under the cap (shrink is power-of-2).
         guard = 0
-        while max(pix.width, pix.height) > FRAME_MAX_EDGE and guard < 5:
+        while max(pix.width, pix.height) > FRAME_MAX_EDGE and guard < 6:
             pix.shrink(1)
             guard += 1
         jpg = pix.tobytes("jpeg", jpg_quality=FRAME_JPEG_QUALITY)
         if not jpg or len(jpg) > FRAME_MAX_BYTES:
             return None
-        import base64 as _b64
         return _b64.b64encode(jpg).decode()
     except Exception:  # noqa: BLE001 — a bad stream never sinks the page
         return None
