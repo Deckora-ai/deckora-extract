@@ -150,6 +150,29 @@ def _render_image_b64(doc: fitz.Document, xref: int) -> str | None:
         return None
 
 
+def _render_region_b64(page: fitz.Page, rect) -> str | None:
+    """Rasterize the page REGION at `rect` -> base64 JPEG, or None.
+
+    Fallback for visuals that aren't recoverable as embedded image streams
+    (flattened graphics, vector maps/charts, composited photos). Captures
+    exactly what's drawn in that box as it appears in the PDF. Because it can
+    include overlaid text, the caller is told `render: "region"` so it can drop
+    the editable text it would otherwise double.
+    """
+    import base64 as _b64
+    try:
+        w = max(float(rect.width), 1.0)
+        h = max(float(rect.height), 1.0)
+        scale = min(3.0, max(0.6, FRAME_MAX_EDGE / max(w, h)))
+        pix = page.get_pixmap(clip=rect, matrix=fitz.Matrix(scale, scale), alpha=False)
+        jpg = pix.tobytes("jpeg", jpg_quality=FRAME_JPEG_QUALITY)
+        if not jpg or len(jpg) > FRAME_MAX_BYTES:
+            return None
+        return _b64.b64encode(jpg).decode()
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _page_layout(doc: fitz.Document, page: fitz.Page, number: int,
                  render_frames: bool = False, budget: dict | None = None) -> dict:
     rect = page.rect
@@ -228,10 +251,18 @@ def _page_layout(doc: fitz.Document, page: fitz.Page, number: int,
             # "Match the PDF" mode: attach the frame's own pixels so the Studio
             # composer can fill the matching frame. Budget-bounded across the doc.
             if render_frames and budget is not None and budget.get("left", 0) > 0:
+                # Prefer the embedded image's own pixels (clean, no baked text).
+                # Fall back to rasterizing the page region for flattened/vector
+                # visuals that aren't recoverable as image streams.
                 b64 = _render_image_b64(doc, int(xref))
+                method = "image"
+                if not b64:
+                    b64 = _render_region_b64(page, r)
+                    method = "region"
                 if b64:
                     img_entry["data_b64"] = b64
                     img_entry["fmt"] = "jpeg"
+                    img_entry["render"] = method
                     budget["left"] -= 1
             images.append(img_entry)
 
