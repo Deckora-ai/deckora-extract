@@ -30,13 +30,18 @@ export default {
     if (!ALLOWED_PATHS.includes(url.pathname)) {
       return new Response("not found", { status: 404 });
     }
-    // Single named instance: extraction is stateless, one warm container
-    // serves all requests; Cloudflare spins it down after sleepAfter.
+    // Single named instance per DEPLOYED VERSION: the instance name carries the
+    // commit SHA (CI passes --var DEPLOY_SHA), so every deploy routes to a
+    // FRESH container running the new image immediately — the old instance
+    // sleeps out and dies. Without this, a pinned "main" instance kept serving
+    // the previous image until it happened to sleep (observed 2026-06-12).
+    // Extraction is stateless; Cloudflare spins instances down after sleepAfter.
     // try/catch turns "no container behind the shim" (and any DO-level throw)
     // into a diagnosable 503 JSON instead of an opaque Cloudflare 1101 — the
     // deckora-marketing caller treats any non-200 as fail-soft.
     try {
-      const container = getContainer(env.EXTRACT_CONTAINER, "main");
+      const instanceName = "main-" + String(env.DEPLOY_SHA || "0").slice(0, 8);
+      const container = getContainer(env.EXTRACT_CONTAINER, instanceName);
       return await container.fetch(request);
     } catch (e) {
       return new Response(
