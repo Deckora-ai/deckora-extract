@@ -161,10 +161,18 @@ def _render_region_b64(page: fitz.Page, rect) -> str | None:
     """
     import base64 as _b64
     try:
-        w = max(float(rect.width), 1.0)
-        h = max(float(rect.height), 1.0)
-        scale = min(3.0, max(0.6, FRAME_MAX_EDGE / max(w, h)))
-        pix = page.get_pixmap(clip=rect, matrix=fitz.Matrix(scale, scale), alpha=False)
+        # Normalize to a plain fitz.Rect and skip degenerate boxes.
+        r = fitz.Rect(rect)
+        if r.is_empty or r.is_infinite or r.width < 2 or r.height < 2:
+            return None
+        # Canonical clip render: dpi controls resolution (no matrix+clip combo,
+        # which is the usual source of empty/failed region pixmaps). Pick a dpi
+        # that lands the longest edge near FRAME_MAX_EDGE.
+        longest_pt = max(r.width, r.height)
+        dpi = int(max(72, min(200, FRAME_MAX_EDGE / (longest_pt / 72.0))))
+        pix = page.get_pixmap(clip=r, dpi=dpi)
+        if pix.alpha:
+            pix = fitz.Pixmap(pix, 0)
         jpg = pix.tobytes("jpeg", jpg_quality=FRAME_JPEG_QUALITY)
         if not jpg or len(jpg) > FRAME_MAX_BYTES:
             return None
